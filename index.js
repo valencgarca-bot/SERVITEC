@@ -8,8 +8,8 @@ const app = express();
 // 📂 BASE DE DATOS
 const db = new sqlite3.Database('./servitec_v1.db');
 
-const MI_CORREO = 'andreavalencia6012@gmail.com';
-const MI_CLAVE = 'nfouktygvxtujevs'; 
+const MI_CORREO = 'nextra2024@gmail.com';
+const MI_CLAVE = 'pwltnvksuudfqvkc'; 
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -23,7 +23,7 @@ db.serialize(() => {
     db.run("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT UNIQUE, pass TEXT, rol TEXT, creado_por INTEGER)");
     db.run("CREATE TABLE IF NOT EXISTS correos (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, user_id INTEGER)");
     db.run("ALTER TABLE usuarios ADD COLUMN creado_por INTEGER", (err) => {});
-    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ruben', '123456', 'Administrador', NULL)");
+    db.run("INSERT OR IGNORE INTO usuarios (user, pass, rol, creado_por) VALUES ('ecuador', '123456', 'Administrador', NULL)");
 });
 
 // 🔥 ESTILOS PROFESIONALES Y MINIMALISTAS - INTERFAZ SERVITEC (ECUADOR) 🔥
