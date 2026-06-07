@@ -1,15 +1,19 @@
 {
-  "name": "servitec",
+  "name": "servitec-panel",
   "version": "1.0.0",
+  "description": "Panel de Control Profesional SERVITEC - Gestión IMAP y Usuarios",
   "main": "index.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "sqlite3": "^5.1.6",
-    "imap-simple": "^5.1.0",
-    "mailparser": "^3.6.4"
-  },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "author": "Servitec",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "imap-simple": "^5.1.0",
+    "mailparser": "^3.7.1",
+    "sqlite3": "^5.1.7"
   }
 }
