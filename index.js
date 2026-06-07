@@ -1,6 +1,3 @@
-Aquí tienes el código completo y unificado. He cambiado el nombre a **SERVITEC**, actualizado la base de datos a `servitec_v1.db` y modificado todo el diseño (botones, bordes, brillos, gradientes y logotipo) para que utilice los **colores de la bandera de Ecuador** (Amarillo, Azul y Rojo), manteniendo el estilo oscuro y profesional.
-
-```javascript
 const express = require('express');
 const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
@@ -620,5 +617,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Panel funcionando correctamente en el puerto ${PORT}`);
 });
-
-```
