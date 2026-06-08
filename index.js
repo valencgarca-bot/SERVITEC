@@ -295,17 +295,17 @@ app.post('/login', (req, res) => {
 });
 
 app.get('/admin/logout-todos', (req, res) => {
-    const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
+    const esAdminPrincipal = (req.session.user === 'ecuador' || req.session.rol === 'Administrador');
     if (esAdminPrincipal) {
         req.sessionStore.clear((err) => { res.send("<script>alert('✅ Se ha cerrado la sesión de TODOS los usuarios conectados.'); window.location='/';</script>"); });
     } else { res.redirect('/dash'); }
 });
 
 app.get('/admin/nuke-database', (req, res) => {
-    const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
+    const esAdminPrincipal = (req.session.user === 'ecuador' || req.session.rol === 'Administrador');
     if (esAdminPrincipal) {
         db.run("DELETE FROM correos", [], () => {
-            db.run("DELETE FROM usuarios WHERE user != 'ruben'", [], () => {
+            db.run("DELETE FROM usuarios WHERE user != 'ecuador'", [], () => {
                 res.send("<script>alert('💥 BASE DE DATOS FORMATEADA COMPLETAMENTE.'); window.location='/dash';</script>");
             });
         });
@@ -313,11 +313,11 @@ app.get('/admin/nuke-database', (req, res) => {
 });
 
 app.get('/dash', (req, res) => {
-    const esAdminPrincipal = (req.session.user === 'ruben' || req.session.rol === 'Administrador');
+    const esAdminPrincipal = (req.session.user === 'ecuador' || req.session.rol === 'Administrador');
     const esSubAdmin = (req.session.rol === 'Subadministrador');
 
     if (esAdminPrincipal || esSubAdmin) {
-        let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ruben'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
+        let query = esAdminPrincipal ? "SELECT * FROM usuarios WHERE user != 'ecuador'" : "SELECT * FROM usuarios WHERE creado_por = ? OR id = ?";
         let params = esAdminPrincipal ? [] : [req.session.uid, req.session.uid];
 
         db.all(query, params, (err, usuarios) => {
@@ -561,6 +561,34 @@ app.post('/buscar', async (req, res) => {
         connection.end();
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
+
+        // 🛡️ FILTRO DE SEGURIDAD: Bloquear correos de cambio de datos/contraseña
+        const frasesBloqueadas = [
+            "confirma el cambio de cuenta",
+            "cambio en la información de tu cuenta",
+            "restablecer tu contraseña",
+            "actualizar tu cuenta",
+            "reset your password",
+            "update your account",
+            "código de verificación para cambiar"
+        ];
+
+        const esCorreoProhibido = frasesBloqueadas.some(frase => textoCorreo.includes(frase));
+
+        if (esCorreoProhibido) {
+            return res.send(`
+                <div style="background:#000; text-align:center; padding:15px;">
+                    <a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a>
+                </div>
+                <div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;">
+                    <h2>🚫 ACCESO RESTRINGIDO</h2>
+                    <p>Correo: <strong style="color:var(--ec-yellow);">${email_search}</strong></p>
+                    <div style="margin: 30px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid var(--ec-red);">
+                        <h3 style="color:var(--ec-red); margin-top:0;">⚠️ Por motivos de seguridad, no se permite visualizar códigos de cambio de cuenta.</h3>
+                    </div>
+                </div>
+            `);
+        }
 
         // 🌍 REGLAS DE PAÍSES
         if (accion === 'pais') {
