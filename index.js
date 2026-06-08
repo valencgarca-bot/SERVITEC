@@ -9,7 +9,7 @@ const app = express();
 const db = new sqlite3.Database('./servitec_v1.db');
 
 const MI_CORREO = 'nextra2024@gmail.com';
-const MI_CLAVE = 'pwltnvksuudfqvkc'; 
+const MI_CLAVE = 'beqeajbqbrsqobzs'; 
 
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
